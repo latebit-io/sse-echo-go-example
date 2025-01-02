@@ -43,23 +43,21 @@ func main() {
 
 		online.AddUser(user)
 		closeChan := make(chan struct{})
-		connections.Store(user, func() {
-			close(closeChan)
-		})
 		messageChan := make(chan string, 1)
 		messenger.Add(user, messageChan)
 		messenger.Send("online", fmt.Sprintf("%s", user))
-
-		defer func() {
-			connections.Delete(user)
-			messenger.Remove(user)
-			online.RemoveUser(user)
-		}()
+		connections.Store(user, func() {
+			close(closeChan)
+			close(messageChan)
+		})
 
 		for {
 			select {
 			case <-c.Request().Context().Done():
 				log.Printf("SSE client disconnected, ip: %v", c.RealIP())
+				connections.Delete(user)
+				messenger.Remove(user)
+				online.RemoveUser(user)
 				messenger.Send("offline", fmt.Sprintf("offline - %s", user))
 				return nil
 			case <-closeChan:
@@ -68,6 +66,7 @@ func main() {
 					log.Println(err.Error())
 				}
 				w.Flush()
+				connections.Delete(user)
 				return nil
 			case msg := <-messageChan:
 				_, err := fmt.Fprintf(w, msg)
