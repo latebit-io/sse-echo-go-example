@@ -2,23 +2,17 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"log"
 	"net/http"
-	"sync"
 )
 
 func main() {
-	messenger := NewMessenger()
-	connections := sync.Map{}
-
+	connectionService := NewDefaultConnectionService()
 	app := echo.New()
-	online := NewOnline()
 
 	app.GET("/", func(c echo.Context) error {
-		log.Printf("SSE client connected, ip: %v", c.RealIP())
 		var user string
 		userCookie, err := c.Cookie("user")
 		if err != nil {
@@ -29,53 +23,20 @@ func main() {
 			c.SetCookie(userCookie)
 		}
 		user = userCookie.Value
-
-		if conn, exists := connections.Load(user); exists {
-			if closeFunc, ok := conn.(func()); ok {
-				closeFunc()
-			}
+		if closed, exists := connectionService.Get(user); exists {
+			closed()
 		}
 
-		w := c.Response()
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-
-		online.AddUser(user)
 		closeChan := make(chan struct{})
 		messageChan := make(chan string, 1)
-		messenger.Add(user, messageChan)
-		messenger.Send("online", fmt.Sprintf("%s", user))
-		connections.Store(user, func() {
+		connectionService.Add(user, messageChan, closeChan, func() {
 			close(closeChan)
 			close(messageChan)
 		})
 
-		for {
-			select {
-			case <-c.Request().Context().Done():
-				log.Printf("SSE client disconnected, ip: %v", c.RealIP())
-				connections.Delete(user)
-				messenger.Remove(user)
-				online.RemoveUser(user)
-				messenger.Send("offline", fmt.Sprintf("offline - %s", user))
-				return nil
-			case <-closeChan:
-				_, err := fmt.Fprintf(w, "data: Message: %s\n\n", "connection closed")
-				if err != nil {
-					log.Println(err.Error())
-				}
-				w.Flush()
-				connections.Delete(user)
-				return nil
-			case msg := <-messageChan:
-				_, err := fmt.Fprintf(w, msg)
-				if err != nil {
-					log.Println(err.Error())
-				}
-				w.Flush()
-			}
-		}
+		connection := NewSSEConnection(c, user, closeChan, messageChan, connectionService)
+		return connection.Run()
+
 	})
 
 	if err := app.Start(":666"); err != nil && !errors.Is(err, http.ErrServerClosed) {
