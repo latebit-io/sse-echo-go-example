@@ -2,23 +2,21 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"log"
 	"net/http"
-	"sync"
+
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 )
 
+// main trying to come up with a decent pattern for using sse
 func main() {
-	messenger := NewMessenger()
-	connections := sync.Map{}
-
+	//manages channels and messages for client connections
+	connectionService := NewDefaultConnectionService()
 	app := echo.New()
-	online := NewOnline()
-
+	// entry point at root
 	app.GET("/", func(c echo.Context) error {
-		log.Printf("SSE client connected, ip: %v", c.RealIP())
+		// simulate users logging in
 		var user string
 		userCookie, err := c.Cookie("user")
 		if err != nil {
@@ -29,55 +27,24 @@ func main() {
 			c.SetCookie(userCookie)
 		}
 		user = userCookie.Value
-
-		if conn, exists := connections.Load(user); exists {
-			if closeFunc, ok := conn.(func()); ok {
-				closeFunc()
-			}
+		//if a user is already logged in close the connection
+		if closed, exists := connectionService.Get(user); exists {
+			closed()
 		}
-
-		w := c.Response()
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-
-		online.AddUser(user)
+		//create new connections
 		closeChan := make(chan struct{})
 		messageChan := make(chan string, 1)
-		messenger.Add(user, messageChan)
-		messenger.Send("online", fmt.Sprintf("%s", user))
-		connections.Store(user, func() {
+		connectionService.Add(user, messageChan, closeChan, func() {
 			close(closeChan)
 			close(messageChan)
 		})
+		// start sse event loop works with ConnectionService
+		connection := NewSSEConnection(c, user, closeChan, messageChan, connectionService)
+		return connection.Run()
 
-		for {
-			select {
-			case <-c.Request().Context().Done():
-				log.Printf("SSE client disconnected, ip: %v", c.RealIP())
-				connections.Delete(user)
-				messenger.Remove(user)
-				online.RemoveUser(user)
-				messenger.Send("offline", fmt.Sprintf("offline - %s", user))
-				return nil
-			case <-closeChan:
-				_, err := fmt.Fprintf(w, "data: Message: %s\n\n", "connection closed")
-				if err != nil {
-					log.Println(err.Error())
-				}
-				w.Flush()
-				connections.Delete(user)
-				return nil
-			case msg := <-messageChan:
-				_, err := fmt.Fprintf(w, msg)
-				if err != nil {
-					log.Println(err.Error())
-				}
-				w.Flush()
-			}
-		}
 	})
 
+	// start echo web service
 	if err := app.Start(":666"); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
