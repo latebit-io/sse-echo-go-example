@@ -6,11 +6,15 @@ import (
 	"sync"
 )
 
+// DefaultConnectionService implements ConnectionService
 type DefaultConnectionService struct {
-	Message     map[string]chan string
+	// Message channel to broadcast messages
+	Message map[string]chan string
+	// Connection used to limit one connection per client
 	Connections sync.Map
 }
 
+// NewDefaultConnectionService creates a new DefaultConnectionService
 func NewDefaultConnectionService() *DefaultConnectionService {
 	return &DefaultConnectionService{
 		Message:     make(map[string]chan string),
@@ -18,23 +22,26 @@ func NewDefaultConnectionService() *DefaultConnectionService {
 	}
 }
 
-func (c *DefaultConnectionService) Add(handle string, message chan string, closed chan struct{}, onclose func()) {
-	c.Message[handle] = message
-	c.Connections.Store(handle, onclose)
+// Add a new connection to be tracked it accepts a function to implement an onclose callback
+func (c *DefaultConnectionService) Add(id string, message chan string, closed chan struct{}, onclose func()) {
+	c.Message[id] = message
+	c.Connections.Store(id, onclose)
 }
 
-func (c *DefaultConnectionService) Remove(handle string) bool {
-	if _, exists := c.Connections.Load(handle); exists {
-		c.Connections.Delete(handle)
-		delete(c.Message, handle)
+// Remove a connection so it is no longer tracked
+func (c *DefaultConnectionService) Remove(id string) bool {
+	if _, exists := c.Connections.Load(id); exists {
+		c.Connections.Delete(id)
+		delete(c.Message, id)
 		return true
 	}
 
 	return false
 }
 
-func (c *DefaultConnectionService) Get(handle string) (func(), bool) {
-	if conn, exists := c.Connections.Load(handle); exists {
+// Get a connection and return its onclose callback
+func (c *DefaultConnectionService) Get(id string) (func(), bool) {
+	if conn, exists := c.Connections.Load(id); exists {
 		if closeFunc, ok := conn.(func()); ok {
 			return closeFunc, true
 		}
@@ -42,6 +49,7 @@ func (c *DefaultConnectionService) Get(handle string) (func(), bool) {
 	return nil, false
 }
 
+// Send a message with event type to all clients
 func (c *DefaultConnectionService) Send(eventType, message string) {
 	event := fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, message)
 	log.Println(event)
@@ -55,4 +63,9 @@ func (c *DefaultConnectionService) Send(eventType, message string) {
 	}
 
 	log.Println("Broadcaster sent message")
+}
+
+// Close a connection that will be reopened by same client different device or browser window
+func (c *DefaultConnectionService) Close(id string) {
+	c.Connections.Delete(id)
 }
