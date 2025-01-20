@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+</head>
+<body>
+<div hx-ext='sse' sse-connect='grid-stream' id='grid' class='grid-container'>
+    <div class='grid-item' hx-swap='innerHTML' id="cell0" sse-swap='cell0'>0</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell1" sse-swap='cell1'>1</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell2" sse-swap='cell2'>2</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell3" sse-swap='cell3'>3</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell4" sse-swap='cell4'>4</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell5" sse-swap='cell5'>5</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell6" sse-swap='cell6'>6</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell7" sse-swap='cell7'>7</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell8" sse-swap='cell8'>8</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell9" sse-swap='cell9'>9</div>
+    <div class='grid-item' hx-swap='innerHTML' id="cell10" sse-swap='cell10'>10</div>
+</div>
+</body>
+</html>

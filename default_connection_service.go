@@ -57,12 +57,12 @@ func (c *DefaultConnectionService) Send(eventType, message string) {
 	for _, ch := range c.Message {
 		select {
 		case ch <- event:
+			log.Println("Broadcaster sent message")
 		default:
 			log.Println("Channel is full, message not sent")
 		}
 	}
 
-	log.Println("Broadcaster sent message")
 }
 
 // Close a connection that will be reopened by same client different device or browser window
