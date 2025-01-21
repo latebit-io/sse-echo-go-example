@@ -17,7 +17,7 @@ func main() {
 	//manages channels and messages for client connections
 	connectionService := NewDefaultConnectionService()
 	grid := NewRedisGrid()
-	init := false
+	init := true
 	if init {
 		grid.Init(context.Background())
 	}
@@ -55,17 +55,7 @@ func main() {
 		})
 		// start sse event loop works with ConnectionService
 		connection := NewSSEConnection(c, user, closeChan, messageChan, connectionService, *grid)
-
-		//cells, err := grid.GetGrid(context.Background())
-		//if err != nil {
-		//	log.Println(err)
-		//}
-		//for i := range cells {
-		//	messageChan <- fmt.Sprintf("event: cell%d\ndata: %s\n\n", cells[i].Cell,
-		//		fmt.Sprintf("<span>%s</span>", cells[i].Username))
-		//}
 		return connection.Run()
-
 	})
 
 	app.GET("/", func(c echo.Context) error {

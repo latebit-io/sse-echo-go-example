@@ -53,6 +53,16 @@ func (conn *SSEConnection) Run() error {
 	if err != nil {
 		log.Println(err.Error())
 	}
+	cells, err := conn.RedisGrid.GetGrid(context.Background())
+	if err != nil {
+		log.Println(err)
+	}
+	
+	for i := range cells {
+		fmt.Fprintf(r, fmt.Sprintf("event: cell%d\ndata: %s\n\n", cells[i].Cell,
+			fmt.Sprintf("<span>%s</span>", cells[i].Username)))
+		r.Flush()
+	}
 
 	//conn.ConnectionService.Send("online", fmt.Sprintf("%s, cell: %d", conn.Id, cell))
 	conn.ConnectionService.Send(fmt.Sprintf("cell%d", cell), fmt.Sprintf("<span>%s</span>", conn.Id))
