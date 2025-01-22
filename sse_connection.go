@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -19,17 +20,20 @@ type SSEConnection struct {
 	MessageChannel chan string
 	// ConnectionService a pointer to the connection service that manages client channels
 	ConnectionService ConnectionService
+	// RedisGrid grid
+	RedisGrid RedisGrid
 }
 
 // NewSSEConnection creates a new connection
 func NewSSEConnection(context echo.Context, id string, closed chan struct{}, message chan string,
-	connectionService ConnectionService) *SSEConnection {
+	connectionService ConnectionService, grid RedisGrid) *SSEConnection {
 	return &SSEConnection{
 		Context:           context,
 		Id:                id,
 		CloseChannel:      closed,
 		MessageChannel:    message,
 		ConnectionService: connectionService,
+		RedisGrid:         grid,
 	}
 }
 
@@ -41,14 +45,38 @@ func (conn *SSEConnection) Run() error {
 	r.Header().Set("Content-Type", "text/event-stream")
 	r.Header().Set("Cache-Control", "no-cache")
 	r.Header().Set("Connection", "keep-alive")
-	conn.ConnectionService.Send("online", fmt.Sprintf("%s", conn.Id))
+	cell, err := conn.RedisGrid.GetEmptyCell(conn.Context.Request().Context())
+	if err != nil {
+		log.Println(err.Error())
+	}
+	err = conn.RedisGrid.SetCell(conn.Context.Request().Context(), cell, conn.Id)
+	if err != nil {
+		log.Println(err.Error())
+	}
+	cells, err := conn.RedisGrid.GetGrid(context.Background())
+	if err != nil {
+		log.Println(err)
+	}
+	
+	for i := range cells {
+		fmt.Fprintf(r, fmt.Sprintf("event: cell%d\ndata: %s\n\n", cells[i].Cell,
+			fmt.Sprintf("<span>%s</span>", cells[i].Username)))
+		r.Flush()
+	}
+
+	//conn.ConnectionService.Send("online", fmt.Sprintf("%s, cell: %d", conn.Id, cell))
+	conn.ConnectionService.Send(fmt.Sprintf("cell%d", cell), fmt.Sprintf("<span>%s</span>", conn.Id))
 	for {
 		select {
 		case <-conn.Context.Request().Context().Done():
 			//context is done when the client disconnects
 			log.Printf("SSE client disconnected, ip: %v", conn.Context.RealIP())
 			conn.ConnectionService.Remove(conn.Id)
-			conn.ConnectionService.Send("offline", fmt.Sprintf("offline - %s", conn.Id))
+			err = conn.RedisGrid.SetEmptyCell(context.Background(), cell)
+			if err != nil {
+				log.Println(fmt.Sprintf("cannot set empty: %s", err.Error()))
+			}
+			conn.ConnectionService.Send(fmt.Sprintf("cell%d", cell), fmt.Sprintf("<span>%d</span>", cell))
 			return nil
 
 		case <-conn.CloseChannel:
