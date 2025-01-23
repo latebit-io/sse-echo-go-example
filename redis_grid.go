@@ -21,6 +21,8 @@ func NewRedisGrid() *RedisGrid {
 }
 
 func (r *RedisGrid) Init(ctx context.Context) {
+	r.Connection.Del(ctx, "grid_cells")
+	r.Connection.Del(ctx, "grid_empty_cell")
 	for i := 0; i < 10; i++ {
 		r.Connection.SAdd(ctx, "grid_empty_cell", i)
 	}
