@@ -31,7 +31,7 @@ func main() {
 	app.Static("/static/", "./static")
 	// entry point at root
 	app.GET("/grid-stream", func(c echo.Context) error {
-		// simulate users logging in
+		// simulate users logging in with cookies
 		var user string
 		userCookie, err := c.Cookie("user")
 		if err != nil {
